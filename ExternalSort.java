@@ -60,10 +60,10 @@ public class ExternalSort extends UnaryOperator {
     private Iterator<Tuple> outputTuples;
 
     /** Reusable tuple list for returns. */
-    private List<Tuple> returnList;
+    private LinkedList<Tuple> returnList;
     
-    /**Initial list of generated runs**/
-     LinkedList<RelationIOManager> Runs_1= new LinkedList<RelationIOManager>();
+   
+     
      private Comparator<Tuple> TupleComparator  =null;
     
     /**
@@ -107,7 +107,7 @@ public class ExternalSort extends UnaryOperator {
      * files cannot be initialised.
      * @throws EngineException 
      */
-    protected void initTempFiles() throws  EngineException {
+    protected String initTempFiles() throws  EngineException {
         ////////////////////////////////////////////
         //
         // initialise the temporary files here
@@ -118,14 +118,16 @@ public class ExternalSort extends UnaryOperator {
         // know of is the output file
         //
         ////////////////////////////////////////////
+    	String tempFile=null;
     	try{
-        outputFile = FileUtil.createTempFileName();
-        sm.createFile(outputFile);
+         tempFile = FileUtil.createTempFileName();
+        sm.createFile(tempFile);
     	}
         catch (StorageManagerException sme) {
             throw new EngineException("Could not instantiate "
                                       + "External Sort", sme);
         }
+        return tempFile;
     } // initTempFiles()
 
     
@@ -164,8 +166,11 @@ public class ExternalSort extends UnaryOperator {
              LinkedList<RelationIOManager> runs_1= generateIniRuns( Man, Rel);
             
              //perform External Sort
+             /* number of remaining passes*/
              int numOfPasses = (int)Math.ceil(Math.log(numOfPages)/Math.log(buffers)) ;
-             outputFile= perform_externalSort(runs_1,numOfPasses,Rel).getFileName();
+             outputMan= perform_externalSort(runs_1,numOfPasses,Rel);
+             outputFile=outputMan.getFileName();
+             cleanup(runs_1);
              
             ////////////////////////////////////////////
             
@@ -175,8 +180,7 @@ public class ExternalSort extends UnaryOperator {
             //
             ////////////////////////////////////////////
             
-            outputMan = new RelationIOManager(sm, getOutputRelation(),
-                                              outputFile);
+            
             outputTuples = outputMan.tuples().iterator();
         }
         catch (Exception sme) {
@@ -186,23 +190,17 @@ public class ExternalSort extends UnaryOperator {
     } // setup()
 
     private RelationIOManager perform_externalSort(LinkedList<RelationIOManager> runs_1,int numOfPasses, Relation rel) {
+    	LinkedList<RelationIOManager> intermediateList = new LinkedList<RelationIOManager>();
     	for (int i=0;i<numOfPasses;i++){
-    			int counter =0;
-    			List<RelationIOManager> intermediateList = new LinkedList<RelationIOManager>();
-    			int arraySize=(runs_1.size()>(buffers-1))?buffers-1:runs_1.size();
-    			while (counter<runs_1.size()){
-    					
-    					
-    					RelationIOManager[] pass = new RelationIOManager[arraySize];
-    					for (int k=0;k<arraySize;k++){
-    						if ((counter+k)==runs_1.size()){
-    							pass[k]=null;
-    							arraySize=k;
-    						}
+    		int counter =0;
+    		int arraySize=(runs_1.size()>(buffers-1))?buffers-1:runs_1.size();
+    		while (counter<runs_1.size()){
+    				RelationIOManager[] pass = new RelationIOManager[arraySize];
+    				for (int k=0;k<arraySize;k++){
     					pass[k]= runs_1.get(counter+k);
-    					}
-    					counter= counter+arraySize;
-    					ArrayList<Iterator<Page>> pageIterators = new ArrayList<Iterator<Page>>();
+    				}
+    				counter= counter+arraySize;
+    				ArrayList<Iterator<Page>> pageIterators = new ArrayList<Iterator<Page>>();
     					for (int k=0;k<arraySize;k++){
     						
 								try {
@@ -232,51 +230,58 @@ public class ExternalSort extends UnaryOperator {
     					for (int k=0;k<arraySize;k++){
     						tuples[k]= tupleIterators.get(buffers).next();
     					}
-    				
+    					String tempFile=null;
     					try {
-							initTempFiles();
+							tempFile=initTempFiles();
 						} catch (EngineException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-						RelationIOManager intermedOutput = new RelationIOManager(getStorageManager(),rel,outputFile);
+						RelationIOManager intermedOutput = new RelationIOManager(getStorageManager(),rel,tempFile);
 						int pagesEmpty=0;
 						while (pagesEmpty <arraySize){
-									Tuple tuple_w= tuples[0];
-									int index=0 ;
-									for (int k=0;k<arraySize;k++){
-													if (tuples[k]!=null){
-														int comparsion = compareTuples(tuples[k],tuple_w);
-														if (comparsion <0){
-															tuple_w= tuples[k];
-															index=k;
-														}
-													}	
-									}	
+								Tuple tuple_w= tuples[0];
+								int index=0 ;
+								for (int k=0;k<arraySize;k++){
+										if (tuples[k]==null){
+											if (tupleIterators.get(k).hasNext()){
+												tuples[k]= tupleIterators.get(k).next();
+											}else if (pageIterators.get(k).hasNext()){
+												bufferPages[k]= pageIterators.get(k).next();
+												tupleIterators.remove(k);
+												tupleIterators.add(index,bufferPages[k].iterator());
+												tuples[k]= tupleIterators.get(k).next();
+									
+											}else{
+												pagesEmpty++;
+												tuples[k]=null;
+									
+											}
+										}
+										if (tuples[k]!=null){
+											int comparsion = compareTuples(tuples[k],tuple_w);
+											if (comparsion <0){
+												 tuple_w= tuples[k];
+												 index=k;
+													}
+										}
+								   }
+										
 									try {
-										intermedOutput.insertTuple(tuple_w);
+										if (tuple_w!=null){
+										intermedOutput.insertTuple(tuple_w);}
+										tuples[index]=null;
 									} catch (StorageManagerException e) {
 							// TODO Auto-generated catch block
 										e.printStackTrace();
 									}
-									if (tupleIterators.get(index).hasNext()){
-										tuples[index]= tupleIterators.get(index).next();
-									}else if (pageIterators.get(index).hasNext()){
-										bufferPages[index]= pageIterators.get(index).next();
-										tupleIterators.remove(index);
-										tupleIterators.add(index,bufferPages[index].iterator());
-										tuples[index]= tupleIterators.get(index).next();
-							
-									}else{
-										pagesEmpty++;
-										tuples[index]=null;
-							
-									}
+									
 						}
 						intermediateList.add(intermedOutput);
 						
     				}
-    			runs_1=(LinkedList<RelationIOManager>) intermediateList;
+    			runs_1= intermediateList;
+    			intermediateList.clear();
     	}
     	if (runs_1.size()==1){
     		return runs_1.getFirst();
@@ -304,24 +309,22 @@ public class ExternalSort extends UnaryOperator {
 				Iterator<Tuple> TupleIt = P.iterator();
 				 while (TupleIt.hasNext()){
 					  Tuple tuple = TupleIt.next();
-					 if (!(tuple instanceof EndOfStreamTuple)) { returnList.add(tuple);}
+					  returnList.add(tuple);
 				 }
 				 counter++;
 				 numOfPages++;
 				 if (counter==buffers || !PageIt.hasNext()){
 					 Collections.sort(returnList,TupleComparator);
 					 returnList.add(new EndOfStreamTuple());
-					 initTempFiles(); // create the temporary output file
+					 String tempFile= initTempFiles(); // create the temporary output file
 			            
-					 Runs_1.add(new RelationIOManager(getStorageManager(), Rel, outputFile));
-					 boolean done = false;
-		             while (! done) {
-		                 Tuple tuple = returnList.remove(0); 
-		                 if (tuple != null) {
-		                     done = (tuple instanceof EndOfStreamTuple);
-		                     if (! done) runs_1.getLast().insertTuple(tuple);
-		                 }
+					 RelationIOManager manRun= new RelationIOManager(getStorageManager(), Rel, tempFile);
+					 
+		             while (!returnList.isEmpty()) {
+		                 Tuple tuple = returnList.removeFirst(); 
+		                 manRun.insertTuple(tuple);
 		             }
+		             runs_1.add(manRun);
 		             counter=0;
 		             returnList.clear();
 					 
@@ -355,22 +358,19 @@ public class ExternalSort extends UnaryOperator {
      * @throws EngineException whenever the operator cannot clean up
      * after itself.
      */
-    public void cleanup () throws EngineException {
+    
+    public void cleanup (List<RelationIOManager> runs_1) throws EngineException {
         try {
             ////////////////////////////////////////////
             //
-            // make sure you delete the intermediate
-            // files after sorting is done
+            // deletes the intermediate files:
+            // 
             //
             ////////////////////////////////////////////
             
-            ////////////////////////////////////////////
-            //
-            // right now, only the output file is 
-            // deleted
-            //
-            ////////////////////////////////////////////
-            sm.deleteFile(outputFile);
+            for (RelationIOManager Man : runs_1){
+            sm.deleteFile(Man.getFileName());
+            }
         }
         catch (StorageManagerException sme) {
             throw new EngineException("Could not clean up final output.", sme);
