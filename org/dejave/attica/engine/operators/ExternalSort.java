@@ -169,9 +169,9 @@ public class ExternalSort extends UnaryOperator {
              /* number of remaining passes*/
              if (numOfPages> buffers){
             	 /*number of remaining passes*/
-            	 System.out.println("Number of pages"+ numOfPages+ "number of buffers"+buffers+" Number of runs"+runs_1.size());
+            	 //System.out.println("Number of pages"+ numOfPages+ "number of buffers"+buffers+" Number of runs"+runs_1.size());
             	 int numOfPasses = (int)Math.ceil(Math.log(runs_1.size() )/Math.log(buffers-1)) ;
-            	 System.out.println("Number of passes left"+ numOfPasses);
+            	// System.out.println("Number of passes left"+ numOfPasses);
             	 /*perform External sort*/
             	 outputMan= perform_externalSort(runs_1,numOfPasses,Rel);
             	 }
@@ -203,11 +203,11 @@ public class ExternalSort extends UnaryOperator {
     	for (int i=0;i<numOfPasses;i++){
     		int counter =0;
     		intermediateList= new LinkedList<RelationIOManager>();
-    		System.out.println("Number of Passes "+i +" runs size "+runs_1.size() );
+    		//System.out.println("Number of Passes "+i +" runs size "+runs_1.size() );
     		
     		while (counter<runs_1.size()){
     			   int  arraySize=((runs_1.size()-counter)<(buffers-1))?(runs_1.size()-counter):buffers-1;
-    			    System.out.println("ArraySize is " +arraySize);
+    			    //System.out.println("ArraySize is " +arraySize);
     				if  (arraySize==1){
     					intermediateList.add(runs_1.pop());
     					break;
