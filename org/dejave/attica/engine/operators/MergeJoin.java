@@ -79,6 +79,7 @@ public class MergeJoin extends NestedLoopsJoin {
 	throws EngineException {
         
         super(left, right, sm, predicate);
+       
         this.leftSlot = leftSlot;
         this.rightSlot = rightSlot;
         returnList = new ArrayList<Tuple>(); 
@@ -118,14 +119,73 @@ public class MergeJoin extends NestedLoopsJoin {
      * wrong with setting this operator up.
      */
     
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     protected void setup() throws EngineException {
         try {
             System.out.println("done");
             ////////////////////////////////////////////
             //
             // YOUR CODE GOES HERE
-            //
+            //extract the sorted left relation
+            ExternalSort leftOp = (ExternalSort)getInputOperator(0);
+            leftOp.setup();
+            RelationIOManager leftinp = leftOp.getOutputmanager();
+            
+            /* extract the sorted right relation */
+            ExternalSort rightOp = (ExternalSort)getInputOperator(1);
+            rightOp.setup();
+            RelationIOManager rightinp = rightOp.getOutputmanager();
+            
+            outputFile= FileUtil.createTempFileName();
+            getStorageManager().createFile(outputFile);
+             outputMan = new RelationIOManager(getStorageManager(),rightOp.getOutputRelation(),outputFile);
+            
+            /* execute mergejoin*/
+            Iterator<Tuple> leftIterator =leftinp.tuples().iterator(); // iterator on the tuples of the left input operator
+            Iterator<Tuple> rightIterator =rightinp.tuples().iterator(); // iterator on the tuples of the right input operator
+            while (leftIterator.hasNext() && rightIterator.hasNext()){
+            	Tuple leftTup = leftIterator.next();
+            	Tuple rightTup = rightIterator.next();
+            	int comparison = leftTup.getValue(leftSlot).compareTo(rightTup.getValue(rightSlot));
+            	/* the tuples in left and right operator are sorted by ExternalSort using the  value of attribute mentioned in the join predicate */ 
+            	while (comparison < 0){
+            		if (leftIterator.hasNext()){
+            		leftTup = leftIterator.next();}
+            		}
+            	while (comparison>0){
+            		if (rightIterator.hasNext()){
+            			rightTup =rightIterator.next();}
+            	}
+            	Tuple nextTup=rightIterator.next();
+            	String tempfileName= FileUtil.createTempFileName();
+        		getStorageManager().createFile(tempfileName);
+        		RelationIOManager tmpMan =new RelationIOManager(getStorageManager(),rightOp.getOutputRelation(),tempfileName); 
+        		tmpMan.insertTuple(rightTup);
+            	while (leftTup.getValue(leftSlot).compareTo(rightTup.getValue(rightSlot))==0){
+            		
+            		
+            		while(rightIterator.hasNext()){
+            			
+            			if (rightTup.getValue(rightSlot)==nextTup.getValue(rightSlot)){
+            				tmpMan.insertTuple(nextTup);
+            				nextTup=  rightIterator.next();
+            			}else {break;}
+            		}
+            		Iterator<Tuple>storedTuples = tmpMan.tuples().iterator();
+            		while (storedTuples.hasNext()){
+            			outputMan.insertTuple(combineTuples(leftTup,storedTuples.next()));
+            		}
+            		leftTup =leftIterator.next();
+            				
+            		}
+            	   rightTup=nextTup;
+            	}
+            		
+            	
+           
+            
+            
             ////////////////////////////////////////////
             
             ////////////////////////////////////////////
