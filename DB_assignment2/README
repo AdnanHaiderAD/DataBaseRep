@@ -1,0 +1,14 @@
+The directory contains a compiled version of the source tree in a jar file along with the source files that have been modified.
+
+Comments have been added to the source files to guide the reader on each step performed by the algorithm. 
+Potential Problems faced : The alogirithm implemented for this assignment consists of nested loops. At the end of the iteration of the topmost while loop, if there arises a case that the pointers both relations point to the last elements,the topmost while loop exists. In situations where the lowermost pointers point to tuples that satisfy the join predicate, the merge-join algorithm will fail to produce this result. 
+
+Solution:
+Thus, an 'if clause' has been  added to overcome the deficiency that checks whether the last elements satisfy the join-predicate and if so then produces a result */
+
+
+
+To run  the jar file the following command should be used:
+java -jar attica.jar  --properties attica.properties
+
+--the properties file must be modified to your local work directory
